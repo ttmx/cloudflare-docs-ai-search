@@ -3,6 +3,12 @@ on:
   push:
     branches:
       - production
+  workflow_dispatch:
+    inputs:
+      force_full_reindex:
+        description: "Rebuild the AI Search index from scratch (send every page, ignore the previous manifest)."
+        type: boolean
+        default: false
 
 jobs:
   publish:
@@ -88,7 +94,8 @@ jobs:
     # The previous manifest is persisted only as a GitHub Actions artifact
     # (`ai-search-manifest`), fetched best-effort from the last successful run.
     # If it is missing or expired the diff simply baselines (sends nothing) —
-    # recover a full index by running the script manually with --send-initial.
+    # recover a full index by re-running this workflow via workflow_dispatch with
+    # the `force_full_reindex` toggle on (passes --force-full-reindex).
     name: AI Search reindex
     if: github.repository == 'ttmx/cloudflare-docs-ai-search'
     needs: publish
@@ -159,12 +166,19 @@ jobs:
           # Read + rewrite the same file so the updated manifest is ready to
           # upload as this run's artifact (previous==manifest is safe: run.ts
           # reads the previous manifest before overwriting it).
+          # force_full_reindex (workflow_dispatch toggle) ignores the previous
+          # manifest and sends every page. Empty on push events => incremental.
+          EXTRA=""
+          if [ "${{ inputs.force_full_reindex }}" = "true" ]; then
+            EXTRA="--force-full-reindex"
+          fi
           pnpm exec tsx bin/ai-search-doc-events.ts \
             --previous .ai-search/page-hashes.json \
             --manifest .ai-search/page-hashes.json \
             --batch-size 25 \
             --base-url "$SITE_BASE_URL" \
-            --send-url "$REINDEX_URL"
+            --send-url "$REINDEX_URL" \
+            $EXTRA
 
       - name: Save updated manifest
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
