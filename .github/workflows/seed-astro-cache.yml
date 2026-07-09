@@ -1,0 +1,33 @@
+name: Seed Astro cache
+
+# One-off helper to break the cold-build spiral: a full cloudflare-docs build
+# on a standard runner is too slow to finish before the runner is reclaimed, so
+# publish-production.yml's `actions/cache` never saves the optimized
+# `.astro-cache/assets`. This job loads a pre-built cache (uploaded as the
+# `astro-cache-seed` release asset) and saves it under the SAME key the publish
+# build restores, so the next build skips image optimization and finishes fast.
+# Safe to delete once the cache is warm.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  seed:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Download + extract seed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download astro-cache-seed --repo "${{ github.repository }}" \
+            --pattern astro-cache-seed.tgz --dir /tmp
+          tar xzf /tmp/astro-cache-seed.tgz
+          echo "restored:"; du -sh .astro-cache/assets
+      - name: Save Astro assets cache
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        with:
+          path: .astro-cache/assets
+          key: astro-assets-${{ hashFiles('src/assets/**') }}
