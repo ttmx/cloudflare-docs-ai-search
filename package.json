@@ -57,7 +57,7 @@
 		"@base-ui/react": "1.5.0",
 		"@cloudflare/ai-search-snippet": "link:../ai-search-snippet/packages/snippet",
 		"@cloudflare/vitest-pool-workers": "0.16.15",
-		"@cloudflare/workers-types": "4.20260628.1",
+		"@cloudflare/workers-types": "4.20260702.1",
 		"@eslint/js": "9.39.4",
 		"@expressive-code/core": "0.43.1",
 		"@expressive-code/plugin-collapsible-sections": "0.43.1",
