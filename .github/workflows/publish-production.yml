@@ -89,7 +89,6 @@ jobs:
     # (`ai-search-manifest`), fetched best-effort from the last successful run.
     # If it is missing or expired the diff simply baselines (sends nothing) —
     # recover a full index by running the script manually with --send-initial.
-    if: github.repository == 'cloudflare/cloudflare-docs'
     name: AI Search reindex
     if: github.repository == 'ttmx/cloudflare-docs-ai-search'
     needs: publish
