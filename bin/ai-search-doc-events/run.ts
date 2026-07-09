@@ -16,12 +16,15 @@ function writeJson(path: string, data: unknown) {
 
 export async function run() {
 	const args = parseArgs();
-	const previous = await readManifest(args.previous);
+	// --force-full-reindex ignores any previous manifest so every page is sent as
+	// a change (a full re-index / rebuild-from-scratch). Otherwise diff against the
+	// previous manifest; with no previous manifest, baseline (send nothing).
+	const previous = args.forceFullReindex ? null : await readManifest(args.previous);
 	const current = await buildManifest(args);
 	const baseline = previous === null;
 	const events = previous
 		? diffManifests(previous, current)
-		: args.sendInitial
+		: args.forceFullReindex
 			? initialEvents(current)
 			: [];
 	const payload = payloadFor(args, current, events, baseline);

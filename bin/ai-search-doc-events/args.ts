@@ -21,7 +21,7 @@ export function parseArgs(): Args {
 			"send-token-env": { type: "string" },
 			"batch-size": { type: "string", default: "100" },
 			commit: { type: "boolean", default: false },
-			"send-initial": { type: "boolean", default: false },
+			"force-full-reindex": { type: "boolean", default: false },
 			concurrency: { type: "string", default: "1" },
 			"max-retries": { type: "string", default: "5" },
 			"resume-file": { type: "string" },
@@ -64,7 +64,7 @@ export function parseArgs(): Args {
 		sendTokenEnv: values["send-token-env"],
 		batchSize,
 		commit: values.commit,
-		sendInitial: values["send-initial"],
+		forceFullReindex: values["force-full-reindex"],
 		concurrency,
 		maxRetries,
 		resumeFile: values["resume-file"],
@@ -99,7 +99,9 @@ Options:
   --max-retries <n>        Batch POST retry attempts on transient HTTP/network failures. Default: 5
   --resume-file <file>     Append-only JSONL of enqueued page paths; skipped on restart
                            so an interrupted run does not re-enqueue them.
-  --send-initial           On first run, send every page as docs.page.changed instead of creating only a baseline.
+  --force-full-reindex     Ignore any previous manifest and send every page as docs.page.changed
+                           (full re-index). Use to rebuild the index from scratch. Without it, a
+                           run with no previous manifest baselines (sends nothing).
   --commit                 Save the latest manifest as the new previous manifest after a successful send/diff.
   --help                   Show this help.
 `);

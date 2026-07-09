@@ -82,7 +82,7 @@ export type Args = {
 	sendTokenEnv?: string;
 	batchSize: number;
 	commit: boolean;
-	sendInitial: boolean;
+	forceFullReindex: boolean;
 	// Reliable-send options (see send.ts).
 	concurrency: number;
 	maxRetries: number;
