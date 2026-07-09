@@ -55,7 +55,7 @@
 		"@astrojs/starlight-docsearch": "0.7.0",
 		"@astrojs/starlight-tailwind": "5.0.0",
 		"@base-ui/react": "1.5.0",
-		"@cloudflare/ai-search-snippet": "link:../ai-search-snippet/packages/snippet",
+		"@cloudflare/ai-search-snippet": "file:./vendor/ai-search-snippet",
 		"@cloudflare/vitest-pool-workers": "0.16.15",
 		"@cloudflare/workers-types": "4.20260628.1",
 		"@eslint/js": "9.39.4",

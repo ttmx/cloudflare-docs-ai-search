@@ -1,0 +1,19 @@
+{
+	"name": "@cloudflare/ai-search-snippet",
+	"version": "0.0.40",
+	"description": "Vendored build of the customized AI Search snippet web component. Source: github.com/cloudflare/ai-search-snippet fork (local changes not yet upstreamed). Rebuild + re-vendor to update.",
+	"type": "module",
+	"private": true,
+	"main": "./lib/search-snippet.umd.js",
+	"module": "./lib/search-snippet.es.js",
+	"types": "./lib/main.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/main.d.ts",
+			"import": "./lib/search-snippet.es.js",
+			"require": "./lib/search-snippet.umd.js",
+			"default": "./lib/search-snippet.es.js"
+		}
+	},
+	"license": "MIT"
+}

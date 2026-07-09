@@ -48,8 +48,8 @@ importers:
         specifier: 1.5.0
         version: 1.5.0(@types/react@19.0.7)(date-fns@4.4.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       '@cloudflare/ai-search-snippet':
-        specifier: link:../ai-search-snippet/packages/snippet
-        version: link:../ai-search-snippet/packages/snippet
+        specifier: file:./vendor/ai-search-snippet
+        version: file:vendor/ai-search-snippet
       '@cloudflare/vitest-pool-workers':
         specifier: 0.16.15
         version: 0.16.15(@cloudflare/workers-types@4.20260628.1)(@vitest/runner@4.1.9)(@vitest/snapshot@4.1.9)(vitest@4.1.9(@types/node@25.9.3)(happy-dom@20.10.3)(vite@7.3.5(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)))
@@ -771,6 +771,9 @@ packages:
   '@clack/prompts@1.5.1':
     resolution: {integrity: sha512-zccHj2z2oCCO4yrDiRSlFOxWerGqRiysP7a5jPK6uoI9URKAquwY42Dd/iUP8JWHxEzdRe4TlbvZCo8z1/mhrw==}
     engines: {node: '>= 20.12.0'}
+
+  '@cloudflare/ai-search-snippet@file:vendor/ai-search-snippet':
+    resolution: {directory: vendor/ai-search-snippet, type: directory}
 
   '@cloudflare/kv-asset-handler@0.5.0':
     resolution: {integrity: sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg==, tarball: https://registry.npmjs.org/@cloudflare/kv-asset-handler/-/kv-asset-handler-0.5.0.tgz}
@@ -7249,6 +7252,8 @@ snapshots:
       fast-string-width: 3.0.2
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
+
+  '@cloudflare/ai-search-snippet@file:vendor/ai-search-snippet': {}
 
   '@cloudflare/kv-asset-handler@0.5.0': {}
 
