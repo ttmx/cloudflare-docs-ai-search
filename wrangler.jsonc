@@ -1,0 +1,40 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "devdocs-ai-search",
+	"account_id": "03edf871695d6beacf406d630950ac4e",
+	"compatibility_date": "2025-06-02",
+	"compatibility_flags": ["nodejs_compat"],
+	"main": "./worker/index.ts",
+	"workers_dev": true,
+	// Enable Workers Logs + Traces (persisted, queryable in the dashboard /
+	// via `wrangler tail`). Full sampling so reindex failures aren't dropped.
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1,
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true,
+		},
+		"traces": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+		},
+	},
+	"rules": [
+		{ "type": "Text", "globs": ["**/__redirects"], "fallthrough": true },
+	],
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS",
+		"not_found_handling": "404-page",
+		"run_worker_first": true,
+	},
+	// AI Search indexing + search now live in the standalone
+	// `devdocs-ai-search-indexer` worker, which owns the AI Search namespace
+	// binding and the `devdocs-ai-search-reindex` queue (producer + consumer).
+	// This worker only proxies /api/ai-search/* to it (see fetch()); the service
+	// binding call is internal (worker-to-worker) so it bypasses Access.
+	"services": [
+		{ "binding": "AI_SEARCH_WORKER", "service": "devdocs-ai-search-indexer" },
+	],
+}

@@ -1,0 +1,190 @@
+name: Publish
+on:
+  push:
+    branches:
+      - production
+
+jobs:
+  publish:
+    if: github.repository == 'ttmx/cloudflare-docs-ai-search'
+    name: Production
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 11
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        id: setup-node
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Restore node_modules (cache hit)
+        id: node-modules-cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('package.json') }}
+
+      - name: Install node_modules (cache miss)
+        run: pnpm install --frozen-lockfile
+        if: steps.node-modules-cache.outputs.cache-hit != 'true'
+
+      - name: Restore Astro assets from cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        with:
+          path: |
+            .astro-cache/assets
+          key: astro-assets-${{ hashFiles('src/assets/**') }}
+          restore-keys: |
+            astro-assets-
+
+      - name: Build
+        run: pnpm run build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        continue-on-error: true
+        with:
+          name: site-html
+          path: dist
+
+      - name: Deploy to Cloudflare Workers
+        run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Notify Google Chat on failure
+        if: failure()
+        env:
+          WEBHOOK_URL: ${{ secrets.CED_TEAM_ALERTS_CHANNEL_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          # Use jq to safely construct JSON payload
+          MESSAGE="❌ *Publish Production* workflow failed.\nActor: $ACTOR\n<https://github.com/$REPO/actions/runs/$RUN_ID|View run>"
+          JSON_PAYLOAD=$(jq -n --arg text "$MESSAGE" '{text: $text}')
+
+          curl -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD"
+
+  reindex:
+    # Diff the freshly built site against the previous AI Search manifest and
+    # send changed/deleted pages to the standalone indexer worker's reindex
+    # endpoint. Runs after the site is published; a reindex failure does not
+    # roll back the deploy (it just reports).
+    #
+    # The previous manifest is persisted only as a GitHub Actions artifact
+    # (`ai-search-manifest`), fetched best-effort from the last successful run.
+    # If it is missing or expired the diff simply baselines (sends nothing) —
+    # recover a full index by running the script manually with --send-initial.
+    if: github.repository == 'cloudflare/cloudflare-docs'
+    name: AI Search reindex
+    if: github.repository == 'ttmx/cloudflare-docs-ai-search'
+    needs: publish
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      # gh CLI needs actions:read to list/download artifacts from prior runs.
+      actions: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: production
+      - name: Set up pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 11
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        id: setup-node
+        with:
+          node-version: 24.x
+          cache: pnpm
+      - name: Restore node_modules (cache hit)
+        id: node-modules-cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('package.json') }}
+      - name: Install node_modules (cache miss)
+        run: pnpm install --frozen-lockfile
+        if: steps.node-modules-cache.outputs.cache-hit != 'true'
+
+      # Reuse the build artifact this run's publish job uploaded (no rebuild).
+      - name: Download built site
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run download "${{ github.run_id }}" --name site-html --dir dist
+
+      # Best-effort: pull the manifest from the last successful run so the diff
+      # only sends changed pages. Missing/expired artifact => baseline.
+      - name: Restore previous manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p .ai-search
+          prev_run=$(gh run list --workflow publish-production.yml --branch production \
+            --status success --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+          if [ -n "$prev_run" ] && gh run download "$prev_run" --name ai-search-manifest --dir .ai-search 2>/dev/null; then
+            echo "Restored previous manifest from run $prev_run."
+          else
+            echo "No previous manifest artifact; diff will baseline (send nothing)."
+          fi
+
+      - name: Reindex AI Search
+        env:
+          # Bearer token for the indexer worker's /api/ai-search/reindex endpoint
+          # (matches bin/ai-search-doc-events send-token-env default).
+          AI_SEARCH_REINDEX_TOKEN: ${{ secrets.AI_SEARCH_REINDEX_TOKEN }}
+          # The indexer sits behind Cloudflare Access, so the reindex call needs
+          # an Access service token (send.ts sends these as CF-Access-Client-*).
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # Absolute URL of the indexer worker's reindex endpoint.
+          REINDEX_URL: ${{ vars.AI_SEARCH_REINDEX_URL }}
+          # Public origin used for the indexed result URLs (your site host).
+          SITE_BASE_URL: ${{ vars.SITE_BASE_URL }}
+        run: |
+          # Read + rewrite the same file so the updated manifest is ready to
+          # upload as this run's artifact (previous==manifest is safe: run.ts
+          # reads the previous manifest before overwriting it).
+          pnpm exec tsx bin/ai-search-doc-events.ts \
+            --previous .ai-search/page-hashes.json \
+            --manifest .ai-search/page-hashes.json \
+            --batch-size 25 \
+            --base-url "$SITE_BASE_URL" \
+            --send-url "$REINDEX_URL"
+
+      - name: Save updated manifest
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: ai-search-manifest
+          path: .ai-search/page-hashes.json
+          retention-days: 7
+          overwrite: true
+
+      - name: Notify Google Chat on failure
+        if: failure()
+        env:
+          WEBHOOK_URL: ${{ secrets.CED_TEAM_ALERTS_CHANNEL_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          MESSAGE="⚠️ *AI Search reindex* failed (site still deployed).\nActor: $ACTOR\n<https://github.com/$REPO/actions/runs/$RUN_ID|View run>"
+          JSON_PAYLOAD=$(jq -n --arg text "$MESSAGE" '{text: $text}')
+          curl -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD"

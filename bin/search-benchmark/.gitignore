@@ -1,0 +1,5 @@
+results/*.json
+results/*.md
+results/*.svg
+results/*.png
+results/*-judged.json

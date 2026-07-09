@@ -1,0 +1,20 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "devdocs-ai-search-prototype",
+	"account_id": "17c5cb7b2728bf2ca270a7aadde956df",
+	"compatibility_date": "2025-06-02",
+	"compatibility_flags": ["nodejs_compat"],
+	"main": "./worker/index.ts",
+	"workers_dev": true,
+	"rules": [
+		{ "type": "Text", "globs": ["**/__redirects"], "fallthrough": true },
+	],
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS",
+		"not_found_handling": "404-page",
+		"run_worker_first": true,
+	},
+	// AI Search indexing + search moved out of this worker into the standalone
+	// `devdocs-ai-search-indexer` worker. This config now only serves the site.
+}
