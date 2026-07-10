@@ -21,11 +21,16 @@ function buildHeaders(args: Args): Headers {
 		"User-Agent": "curl/8.7.1",
 	});
 	if (token) headers.set("Authorization", `Bearer ${token}`);
-	if (accessClientId && accessClientSecret) {
+	// Use exactly one Access authentication mechanism. Sending a valid user JWT
+	// together with an expired/invalid service-token pair can make Access evaluate
+	// the stale service credentials and redirect to login (302) instead of honoring
+	// the JWT. Prefer the freshly minted JWT; retain the service pair as fallback.
+	if (accessToken) {
+		headers.set("cf-access-token", accessToken);
+	} else if (accessClientId && accessClientSecret) {
 		headers.set("CF-Access-Client-Id", accessClientId);
 		headers.set("CF-Access-Client-Secret", accessClientSecret);
 	}
-	if (accessToken) headers.set("cf-access-token", accessToken);
 	return headers;
 }
 
