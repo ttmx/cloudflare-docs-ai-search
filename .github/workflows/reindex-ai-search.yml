@@ -107,9 +107,11 @@ jobs:
       - name: Enqueue full AI Search reindex
         env:
           AI_SEARCH_REINDEX_TOKEN: ${{ secrets.AI_SEARCH_REINDEX_TOKEN }}
-          # Use the short-lived Access JWT exclusively. send.ts can fall back to
-          # a service-token pair elsewhere, but mixing both caused Access 302s.
-          CF_ACCESS_TOKEN: ${{ secrets.CF_ACCESS_TOKEN }}
+          # GitHub-hosted runners need a non-interactive Access service token.
+          # User JWTs from `cloudflared access login` can be device/WARP-bound
+          # and are not portable to the runner.
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           REINDEX_URL: ${{ vars.AI_SEARCH_REINDEX_URL }}
           SITE_BASE_URL: ${{ vars.SITE_BASE_URL }}
         run: |
