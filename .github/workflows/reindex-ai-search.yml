@@ -51,6 +51,32 @@ jobs:
         run: pnpm install --frozen-lockfile
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
 
+      - name: Verify reindex authentication
+        env:
+          AI_SEARCH_REINDEX_TOKEN: ${{ secrets.AI_SEARCH_REINDEX_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          REINDEX_URL: ${{ vars.AI_SEARCH_REINDEX_URL }}
+        run: |
+          set -euo pipefail
+          response=$(mktemp)
+          status=$(curl --silent --show-error \
+            --output "$response" \
+            --write-out '%{http_code}' \
+            --request POST "$REINDEX_URL" \
+            --header 'Content-Type: application/json' \
+            --header 'User-Agent: curl/8.7.1' \
+            --header "Authorization: Bearer $AI_SEARCH_REINDEX_TOKEN" \
+            --header "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+            --header "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+            --data '{"version":1,"events":[]}' \
+            --max-time 20)
+          if [ "$status" != "202" ]; then
+            echo "Reindex authentication probe failed: HTTP $status" >&2
+            exit 1
+          fi
+          echo "Reindex authentication probe succeeded: HTTP 202."
+
       - name: Download latest built site
         id: source
         env:
