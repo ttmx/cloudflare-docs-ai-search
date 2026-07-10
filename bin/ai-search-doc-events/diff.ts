@@ -67,6 +67,9 @@ export function diffManifests(previous: Manifest, current: Manifest) {
 			path: oldPage.path,
 			url: oldPage.url,
 			key: oldPage.key,
+			// Let the indexer enqueue one independently retryable delete per item
+			// instead of discovering and deleting the whole page in one queue job.
+			removedSectionKeys: oldPage.sections.map((section) => section.key),
 		});
 	}
 
