@@ -154,8 +154,10 @@ jobs:
           # Bearer token for the indexer worker's /api/ai-search/reindex endpoint
           # (matches bin/ai-search-doc-events send-token-env default).
           AI_SEARCH_REINDEX_TOKEN: ${{ secrets.AI_SEARCH_REINDEX_TOKEN }}
-          # The indexer sits behind Cloudflare Access, so the reindex call needs
-          # an Access service token (send.ts sends these as CF-Access-Client-*).
+          # The indexer sits behind Cloudflare Access. The short-lived JWT minted
+          # with `cloudflared access login` is preferred; the service-token pair
+          # remains as a fallback. send.ts forwards all configured credentials.
+          CF_ACCESS_TOKEN: ${{ secrets.CF_ACCESS_TOKEN }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           # Absolute URL of the indexer worker's reindex endpoint.
