@@ -57,4 +57,12 @@ export async function run() {
 			2,
 		),
 	);
+
+	// A failed enqueue used to return `sent: false` but leave the process exit
+	// code at zero, making GitHub Actions report a green reindex even when every
+	// batch received an Access 302. No events is a legitimate incremental no-op;
+	// attempted delivery with any failed batch is not.
+	if (events.length > 0 && !sent) {
+		throw new Error(`Failed to enqueue one or more of ${events.length} reindex events`);
+	}
 }

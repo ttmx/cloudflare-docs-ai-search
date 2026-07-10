@@ -1,0 +1,133 @@
+name: AI Search full reindex (no build)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Optional successful Publish run ID whose site-html artifact should be indexed. Empty uses the latest available production artifact."
+        type: string
+        required: false
+        default: ""
+
+# Avoid accidentally enqueueing the whole site twice from overlapping manual runs.
+concurrency:
+  group: ai-search-full-reindex
+  cancel-in-progress: false
+
+jobs:
+  reindex:
+    name: AI Search full reindex (no build)
+    if: github.repository == 'ttmx/cloudflare-docs-ai-search'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      # Use the default branch's latest reindex tooling. The built site itself is
+      # downloaded from a successful production Publish run below.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: main
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 11
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        id: setup-node
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Restore node_modules (cache hit)
+        id: node-modules-cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('package.json') }}
+
+      - name: Install node_modules (cache miss)
+        run: pnpm install --frozen-lockfile
+        if: steps.node-modules-cache.outputs.cache-hit != 'true'
+
+      - name: Download latest built site
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUESTED_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+
+          download_site() {
+            local run_id="$1"
+            rm -rf dist
+            mkdir -p dist
+            gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name site-html \
+              --dir dist
+          }
+
+          source_run="$REQUESTED_RUN_ID"
+          if [ -n "$source_run" ]; then
+            echo "Downloading site-html from requested run $source_run."
+            download_site "$source_run"
+          else
+            # Artifacts can expire or be missing when upload-artifact was allowed
+            # to continue on error, so try recent successful production runs until
+            # one actually has a downloadable site-html artifact.
+            while read -r candidate; do
+              [ -n "$candidate" ] || continue
+              echo "Trying site-html from successful Publish run $candidate."
+              if download_site "$candidate"; then
+                source_run="$candidate"
+                break
+              fi
+            done < <(
+              gh run list \
+                --repo "$GITHUB_REPOSITORY" \
+                --workflow publish-production.yml \
+                --branch production \
+                --status success \
+                --limit 20 \
+                --json databaseId \
+                --jq '.[].databaseId'
+            )
+          fi
+
+          if [ -z "$source_run" ] || [ ! -d dist ]; then
+            echo "No downloadable site-html artifact found." >&2
+            exit 1
+          fi
+
+          echo "Using site-html from run $source_run."
+          echo "source_run_id=$source_run" >> "$GITHUB_OUTPUT"
+
+      - name: Enqueue full AI Search reindex
+        env:
+          AI_SEARCH_REINDEX_TOKEN: ${{ secrets.AI_SEARCH_REINDEX_TOKEN }}
+          CF_ACCESS_TOKEN: ${{ secrets.CF_ACCESS_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          REINDEX_URL: ${{ vars.AI_SEARCH_REINDEX_URL }}
+          SITE_BASE_URL: ${{ vars.SITE_BASE_URL }}
+        run: |
+          pnpm exec tsx bin/ai-search-doc-events.ts \
+            --force-full-reindex \
+            --batch-size 25 \
+            --base-url "$SITE_BASE_URL" \
+            --send-url "$REINDEX_URL"
+
+      - name: Summary
+        if: always()
+        env:
+          SOURCE_RUN_ID: ${{ steps.source.outputs.source_run_id }}
+        run: |
+          {
+            echo "## AI Search full reindex"
+            echo
+            echo "- Build source run: ${SOURCE_RUN_ID:-not downloaded}"
+            echo "- Target endpoint: ${{ vars.AI_SEARCH_REINDEX_URL }}"
+            echo "- This workflow reuses site-html and does not build or deploy the site."
+          } >> "$GITHUB_STEP_SUMMARY"
